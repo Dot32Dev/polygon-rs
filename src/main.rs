@@ -144,7 +144,10 @@ impl<'a> State<'a> {
         };
         surface.configure(&device, &config);
 
-        let triangle_mesh = mesh::make_triangle(&device);
+        let triangle_mesh =
+            mesh::generate_random_convex_polygon(&device, 10, [0.75, 0.5, 0.2]);
+        // mesh::generate_hard_coded_convex_polygon(&device);
+        // mesh::make_triangle(&device);
 
         let mut render_pipeline_builder =
             Pipleline::new("shader.wgsl", "vs_main", "fs_main", config.format);
@@ -243,7 +246,7 @@ impl<'a> State<'a> {
             renderpass.set_pipeline(&self.render_pipeline);
             renderpass.set_bind_group(0, &self.uniform_bind_group, &[]);
             renderpass.set_vertex_buffer(0, self.triangle_mesh.slice(..));
-            renderpass.draw(0..3, 0..1);
+            renderpass.draw(0..27, 0..1);
         }
 
         self.queue.submit(std::iter::once(command_encoder.finish()));
