@@ -25,7 +25,10 @@ fn main() {
     event_loop.set_control_flow(ControlFlow::Poll);
 
     // Input the event loop and this is where the window will send its events
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_title("Polygon Generator")
+        .build(&event_loop)
+        .unwrap();
 
     let mut state = pollster::block_on(State::new(&window));
 
@@ -156,7 +159,7 @@ impl<'a> State<'a> {
         for _ in 0..10 {
             polygons.push(Polygon::generate_with_position(
                 10,
-                [0.75, 0.5, 0.25],
+                hsl_to_rgb(rng.gen(), 0.6, 0.4),
                 [
                     (rng.gen_range(0..size.width) as f32
                         - size.width as f32 / 2.0),
@@ -291,3 +294,24 @@ impl<'a> State<'a> {
 // fn get_aspect_ratio(width: u32, height: u32) -> f32 {
 //     return width as f32 / height as f32;
 // }
+
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [f32; 3] {
+    if s == 0.0 {
+        return [l, l, l];
+    }
+
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h * 6.0) % 2.0 - 1.0).abs());
+    let m = l - c / 2.0;
+
+    let (r, g, b) = match (h * 6.0).floor() as i32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+
+    [r + m, g + m, b + m]
+}
