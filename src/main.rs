@@ -10,6 +10,8 @@ use renderer_backend::pipeline::Pipleline;
 use renderer_backend::uniform;
 use renderer_backend::util;
 
+mod polygon;
+
 fn main() {
     // WGPU logs via this crate. We must call init to enable it
     env_logger::init();

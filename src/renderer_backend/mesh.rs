@@ -6,7 +6,7 @@ use wgpu::util::DeviceExt;
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct Vertex {
-    position: [f32; 3],
+    position: [f32; 2],
     colour: [f32; 3],
 }
 
@@ -14,7 +14,7 @@ impl Vertex {
     pub fn get_layout() -> wgpu::VertexBufferLayout<'static> {
         // No idea why this has to be a const
         const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
-            wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+            wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x3];
 
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as u64,
@@ -28,14 +28,14 @@ impl Vertex {
 pub fn make_triangle(device: &wgpu::Device) -> wgpu::Buffer {
     let size = 1200.0; // Size
     let vertices: [Vertex; 3] = [
-        Vertex {position: [1.0*size,  -1.0*size, 0.0], colour: [1.0, 0.0, 0.0]},
-        Vertex {position: [0.0*size,   1.0*size, 0.0], colour: [0.0, 1.0, 0.0]},
-        Vertex {position: [-1.0*size, -1.0*size, 0.0], colour: [0.0, 0.0, 1.0]},
+        Vertex {position: [1.0*size,  -1.0*size], colour: [1.0, 0.0, 0.0]},
+        Vertex {position: [0.0*size,   1.0*size], colour: [0.0, 1.0, 0.0]},
+        Vertex {position: [-1.0*size, -1.0*size], colour: [0.0, 0.0, 1.0]},
     ];
 
     let buffer_descriptor = wgpu::util::BufferInitDescriptor {
         label: Some("Vertex buffer"),
-        contents: unsafe { util::any_as_u8_slice(&vertices) }, // Vertices to u8 slice
+        contents: unsafe { util::any_as_u8_slice(&vertices) },
         usage: wgpu::BufferUsages::VERTEX,
     };
 
@@ -147,7 +147,7 @@ pub fn generate_random_convex_polygon(
 
     for point in &vec {
         vertices.push(Vertex {
-            position: [x as f32, y as f32, 0.0],
+            position: [x as f32, y as f32],
             colour,
         });
 
@@ -230,16 +230,12 @@ fn triangulate_polygon(outline: &[Vertex]) -> Vec<Vertex> {
 
 fn calculate_center(vertices: &[Vertex]) -> Vertex {
     let count = vertices.len() as f32;
-    let sum = vertices.iter().fold([0.0f32; 3], |acc, v| {
-        [
-            acc[0] + v.position[0],
-            acc[1] + v.position[1],
-            acc[2] + v.position[2],
-        ]
+    let sum = vertices.iter().fold([0.0f32; 2], |acc, v| {
+        [acc[0] + v.position[0], acc[1] + v.position[1]]
     });
 
     Vertex {
-        position: [sum[0] / count, sum[1] / count, sum[2] / count],
-        colour: [1.0, 1.0, 1.0], // You might want to adjust this
+        position: [sum[0] / count, sum[1] / count],
+        colour: [1.0, 1.0, 1.0], // I might want to adjust this
     }
 }

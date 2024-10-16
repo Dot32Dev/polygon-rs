@@ -7,7 +7,7 @@ struct WindowSize {
 @group(0) @binding(0) var<uniform> window_size: WindowSize;
 
 struct Vertex {
-    @location(0) position: vec3<f32>,
+    @location(0) position: vec2<f32>,
     @location(1) colour: vec3<f32>,
 }
 
@@ -21,7 +21,7 @@ fn vs_main(vertex: Vertex) -> VertexPayload {
     var out: VertexPayload;
 
     // Transform the vertex position from normalized space to pixel space
-    let ndc_position = vertex.position.xy;
+    let ndc_position = vertex.position;
 
     // Convert NDC (-1 to 1) to screen space (0 to windowSize)
     let pixel_position = ndc_position / window_size.windowSize;
@@ -29,7 +29,7 @@ fn vs_main(vertex: Vertex) -> VertexPayload {
     // // Map pixel position back to NDC space (-1 to 1)
     // let adjusted_position = (pixel_position / window_size.windowSize) * 2.0 - vec2<f32>(1.0);
 
-    out.position = vec4<f32>(pixel_position, vertex.position.z, 1.0);
+    out.position = vec4<f32>(pixel_position, 0.0, 1.0);
 
     out.colour = vertex.colour;
 
