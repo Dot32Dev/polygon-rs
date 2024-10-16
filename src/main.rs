@@ -1,3 +1,4 @@
+use rand::Rng;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -11,6 +12,7 @@ use renderer_backend::uniform;
 use renderer_backend::util;
 
 mod polygon;
+use polygon::Polygon;
 
 fn main() {
     // WGPU logs via this crate. We must call init to enable it
@@ -73,9 +75,11 @@ struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     window: &'a Window,
     render_pipeline: wgpu::RenderPipeline,
-    triangle_mesh: wgpu::Buffer,
+    mesh: wgpu::Buffer,
+    vertex_count: u32,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
+    // polygons: Vec<Polygon>,
 }
 
 impl<'a> State<'a> {
@@ -146,8 +150,32 @@ impl<'a> State<'a> {
         };
         surface.configure(&device, &config);
 
-        let triangle_mesh =
-            mesh::generate_random_convex_polygon(&device, 10, [0.75, 0.5, 0.2]);
+        // Generate polygons
+        let mut rng = rand::thread_rng();
+        let mut polygons = Vec::new();
+        for _ in 0..10 {
+            polygons.push(Polygon::generate_with_position(
+                10,
+                [0.75, 0.5, 0.25],
+                [
+                    (rng.gen_range(0..size.width) as f32
+                        - size.width as f32 / 2.0),
+                    (rng.gen_range(0..size.height) as f32
+                        - size.height as f32 / 2.0),
+                ],
+            ))
+        }
+
+        let mut vertices = Vec::new();
+        for polygon in polygons {
+            vertices.append(&mut polygon.transformed_vertices());
+        }
+
+        let vertex_count = vertices.len() as u32;
+
+        let mesh = mesh::from_vertices(&device, &vertices);
+        // mesh::generate_random_convex_polygon(&device, 10, [0.75, 0.5, 0.2]);
+
         // mesh::generate_hard_coded_convex_polygon(&device);
         // mesh::make_triangle(&device);
 
@@ -179,7 +207,8 @@ impl<'a> State<'a> {
             config,
             size,
             render_pipeline,
-            triangle_mesh,
+            mesh,
+            vertex_count,
             uniform_buffer,
             uniform_bind_group,
         }
@@ -247,8 +276,8 @@ impl<'a> State<'a> {
                 command_encoder.begin_render_pass(&render_pass_descriptor);
             renderpass.set_pipeline(&self.render_pipeline);
             renderpass.set_bind_group(0, &self.uniform_bind_group, &[]);
-            renderpass.set_vertex_buffer(0, self.triangle_mesh.slice(..));
-            renderpass.draw(0..27, 0..1);
+            renderpass.set_vertex_buffer(0, self.mesh.slice(..));
+            renderpass.draw(0..self.vertex_count, 0..1);
         }
 
         self.queue.submit(std::iter::once(command_encoder.finish()));
