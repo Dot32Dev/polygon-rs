@@ -158,9 +158,10 @@ pub fn generate_random_convex_polygon(
         min_polygon_y = min_polygon_y.min(y);
     }
 
-    // Step 10: Move the polygon to the original min and max coordinates
-    let x_shift = min_x - min_polygon_x;
-    let y_shift = min_y - min_polygon_y;
+    // Step 10: Move the polygon
+    let center_vertex = calculate_center(&vertices);
+    let x_shift = -center_vertex.position[0];
+    let y_shift = -center_vertex.position[1];
 
     let size = 600.0;
 
