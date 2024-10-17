@@ -1,6 +1,8 @@
 use rand::Rng;
+// use winit::event::{ElementState, KeyEvent, WindowEvent};
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{
-    event::{Event, WindowEvent},
+    event::{ElementState, Event, KeyEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
@@ -32,6 +34,12 @@ fn main() {
 
     let mut state = pollster::block_on(State::new(&window));
 
+    // Track which keys are held down
+    let mut w_pressed = false;
+    let mut a_pressed = false;
+    let mut s_pressed = false;
+    let mut d_pressed = false;
+
     event_loop
         // Run supply's the event and event_loop_control_target inputs
         .run(move |event, event_loop_window_target| {
@@ -53,7 +61,7 @@ fn main() {
                 }
                 Event::AboutToWait => {
                     // Update
-                    state.update();
+                    state.update(w_pressed, a_pressed, s_pressed, d_pressed);
                 }
                 Event::WindowEvent {
                     event: WindowEvent::RedrawRequested,
@@ -62,6 +70,31 @@ fn main() {
                     // Draw
                     state.render().unwrap();
                 }
+                Event::WindowEvent {
+                    event:
+                        WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    physical_key,
+                                    state,
+                                    ..
+                                },
+                            ..
+                        },
+                    ..
+                } => {
+                    let is_pressed = state == ElementState::Pressed;
+                    if let PhysicalKey::Code(keycode) = physical_key {
+                        match keycode {
+                            KeyCode::KeyW => w_pressed = is_pressed,
+                            KeyCode::KeyA => a_pressed = is_pressed,
+                            KeyCode::KeyS => s_pressed = is_pressed,
+                            KeyCode::KeyD => d_pressed = is_pressed,
+                            _ => {}
+                        }
+                    }
+                }
+
                 _ => (),
             }
         })
@@ -82,7 +115,7 @@ struct State<'a> {
     vertex_count: u32,
     uniform_buffer: wgpu::Buffer,
     uniform_bind_group: wgpu::BindGroup,
-    // polygons: Vec<Polygon>,
+    polygons: Vec<Polygon>,
 }
 
 impl<'a> State<'a> {
@@ -158,7 +191,7 @@ impl<'a> State<'a> {
         let mut polygons = Vec::new();
         for _ in 0..10 {
             polygons.push(Polygon::generate_with_position(
-                10,
+                10, // Amount of vertices in the polygon
                 hsl_to_rgb(rng.gen(), 0.6, 0.4),
                 [
                     (rng.gen_range(0..size.width) as f32
@@ -170,7 +203,7 @@ impl<'a> State<'a> {
         }
 
         let mut vertices = Vec::new();
-        for polygon in polygons {
+        for polygon in &polygons {
             vertices.append(&mut polygon.transformed_vertices());
         }
 
@@ -214,6 +247,7 @@ impl<'a> State<'a> {
             vertex_count,
             uniform_buffer,
             uniform_bind_group,
+            polygons,
         }
     }
 
@@ -234,7 +268,113 @@ impl<'a> State<'a> {
         }
     }
 
-    fn update(&mut self) {
+    fn update(
+        &mut self,
+        w_pressed: bool,
+        a_pressed: bool,
+        s_pressed: bool,
+        d_pressed: bool,
+    ) {
+        let speed = 15.0;
+        if w_pressed {
+            self.polygons[0].move_by(speed, [0.0, 1.0]);
+        }
+        if a_pressed {
+            self.polygons[0].move_by(speed, [-1.0, 0.0]);
+        }
+        if s_pressed {
+            self.polygons[0].move_by(speed, [0.0, -1.0]);
+        }
+        if d_pressed {
+            self.polygons[0].move_by(speed, [1.0, 0.0]);
+        }
+
+        for polygon in &mut self.polygons {
+            polygon.update();
+        }
+
+        // Check for collision on the polygons
+        let polygon_count = self.polygons.len();
+        for i in 0..polygon_count {
+            for j in (i + 1)..polygon_count {
+                // Use split_at_mut to get mutable references to both polygons
+                let (first, second) = self.polygons.split_at_mut(j);
+                let polygon1 = &mut first[i];
+                let polygon2 = &mut second[0];
+
+                match polygon1.seperating_axis_theorem(polygon2) {
+                    Some((distance, angle)) => {
+                        // // Now you can mutably access and modify both polygons
+                        // // Move both polygons out of each other
+                        // polygon1.move_by(-distance / 5.0, angle);
+                        // polygon2.move_by(distance / 5.0, angle);
+
+                        // Calculate relative velocity
+                        let relative_velocity = [
+                            polygon2.linear_velocity[0]
+                                - polygon1.linear_velocity[0],
+                            polygon2.linear_velocity[1]
+                                - polygon1.linear_velocity[1],
+                        ];
+
+                        // Calculate relative velocity along the normal
+                        let velocity_along_normal =
+                            polygon::dot_product(&relative_velocity, &angle);
+
+                        // Don't resolve if velocities are separating
+                        if velocity_along_normal > 0.0 {
+                            continue;
+                        }
+
+                        // Calculate restitution (coefficient of restitution)
+                        let e = 0.2; // You can adjust this value
+
+                        // Calculate impulse scalar
+                        let j = -(1.0 + e) * velocity_along_normal
+                            / (1.0 / polygon1.mass + 1.0 / polygon2.mass);
+
+                        // Calculate impulse vector
+                        let impulse = [j * angle[0], j * angle[1]];
+
+                        // Calculate collision point (approximation)
+                        let collision_point = [
+                            (polygon1.position[0] + polygon2.position[0]) / 2.0,
+                            (polygon1.position[1] + polygon2.position[1]) / 2.0,
+                        ];
+
+                        // Apply impulse to both polygons
+                        polygon1.apply_impulse(
+                            [-impulse[0], -impulse[1]],
+                            collision_point,
+                        );
+                        polygon2.apply_impulse(impulse, collision_point);
+
+                        // Move polygons apart to prevent sticking
+                        let correction = 0.2 * distance.max(0.0)
+                            / (1.0 / polygon1.mass + 1.0 / polygon2.mass);
+                        let correction_vector = [
+                            correction * angle[0] / polygon1.mass,
+                            correction * angle[1] / polygon1.mass,
+                        ];
+
+                        polygon1.position[0] -= correction_vector[0];
+                        polygon1.position[1] -= correction_vector[1];
+                        polygon2.position[0] += correction_vector[0];
+                        polygon2.position[1] += correction_vector[1];
+                    }
+                    None => (),
+                }
+            }
+        }
+
+        // Batch all polygons together after their positions are updated
+        let mut vertices = Vec::new();
+        for polygon in &self.polygons {
+            vertices.append(&mut polygon.transformed_vertices());
+        }
+
+        self.vertex_count = vertices.len() as u32;
+        self.mesh = mesh::from_vertices(&self.device, &vertices);
         self.window.request_redraw();
     }
 
